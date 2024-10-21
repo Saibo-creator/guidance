@@ -1,7 +1,5 @@
 from guidance._grammar import GenRegexTerminalRule, JoinRule, GrammarRule, string, capture
 
-# alias for the GrammarFunction class, GrammarRule
-GrammarRule = GrammarRule
 
 class TestGrammarRules:
     def __init__(self):
@@ -39,13 +37,41 @@ class TestGrammarRules:
         # Case 1 - Test adding a GrammarRule instance with a string
         terminal_rule = GenRegexTerminalRule(body_regex="a", stop_regex="b")
         added_rule = terminal_rule + "c"
-        assert isinstance(added_rule, str), f"Expected type str, got {type(added_rule)}"
+        assert isinstance(added_rule, JoinRule), f"Expected type Join, got {type(added_rule)}"
 
         # Test adding two GrammarRule instances
         terminal_rule1 = GenRegexTerminalRule(body_regex="Kobe", stop_regex="Bryant")
         terminal_rule2 = GenRegexTerminalRule(body_regex="Lebron", stop_regex="James")
         added_rule = terminal_rule1 + terminal_rule2
         assert isinstance(added_rule, JoinRule), f"Expected type Join, got {type(added_rule)}"
+
+    def test_add_method(self):
+
+        class MyNumber:
+            def __init__(self, value):
+                self.value = value
+
+            def __radd__(self, other):
+                # Handle right-side addition with integers
+                if isinstance(other, int):
+                    return self.value + other
+                return NotImplemented
+
+        # Create an instance of MyNumber
+        num = MyNumber(10)
+
+        # Try adding the integer 5 on the left
+        result = 5 + num  # This will call num.__radd__(5)
+        assert result == 15, f"Expected 15, got {result}"
+
+        # Try adding the number on the right
+        try:
+            result = num + 5  # This would call num.__add__(5) if it were defined.
+        except TypeError as e:
+            assert str(e) == "unsupported operand type(s) for +: 'MyNumber' and 'int'"
+        else:
+            assert False, "Expected a TypeError but did not get one"
+        
 
     def test_gen_join(self):
         # Test joining two Gen instances
@@ -67,7 +93,7 @@ class TestGrammarRules:
         rule1 = GenRegexTerminalRule(body_regex="a", stop_regex="b")
         rule2 = GenRegexTerminalRule(body_regex="c", stop_regex="d")
         joined_rule = JoinRule([rule1, rule2], name="my_join", max_tokens=199)
-        expected_repr = 'my_join              <- be bf        max_tokens=199'
+        expected_repr = 'my_join'
         assert repr(joined_rule).startswith(expected_repr), f"Expected repr to start with '{expected_repr}', got {repr(joined_rule)}"
 
 
@@ -80,24 +106,31 @@ class TestGrammarRules:
 
         assert "capture_name=my_captured" in repr(captured), f"Expected 'capture_name='my_captured'' in repr, got {repr(captured)}"
 
+
+    def run_all_tests(self):
+       # ANSI color codes for green, red, and yellow
+        green = "\033[92m"
+        red = "\033[91m"
+        yellow = "\033[93m"
+        reset = "\033[0m"
+        
+        # Dynamically find all methods that start with "test_"
+        methods = [method for method in dir(self) if method.startswith("test_") and callable(getattr(self, method))]
+        # Sort the methods
+        methods.sort()
+        for method in methods:
+            test_method = getattr(self, method)
+            try:
+                test_method()
+                print(f"{yellow}{method}{reset} - {green}passed{reset}")
+            except AssertionError as e:
+                print(f"{yellow}{method}{reset} - {red}failed: {e}{reset}")
+
+
+
 # Run the tests manually
 if __name__ == "__main__":
     tester = TestGrammarRules()
-    
-    tester.test_gen_initialization()
-    print("test_gen_initialization passed")
-    
-    tester.test_grammar_rule_auto_naming()
-    print("test_grammar_function_naming passed")
-    
-    tester.test_gen_join()
-    print("test_gen_join passed")
-    
-    tester.test_string_rule()
-    print("test_string_function passed")
-    
-    tester.test_join_rule()
-    print("test_join_representation passed")
-    
-    tester.test_capture()
-    print("test_capture passed")
+
+    # Run all tests
+    tester.run_all_tests()

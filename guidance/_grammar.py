@@ -682,7 +682,6 @@ def string(value: Union[str, bytes]) -> Union[NullTerminaleRule, JoinRule]:
     if len(value) == 0:
         return NullTerminaleRule()
     else:
-        import pdb; pdb.set_trace()
         return JoinRule([ByteTerminalRule(b[i : i + 1]) for i in range(len(b))], name=str(b))
 
 
