@@ -54,6 +54,7 @@ class TokenParser:
         )
         self._generator = self._parse(prompt, ensure_bos_token)
         self._done = False
+        import pdb; pdb.set_trace()
 
     def is_accepting(self) -> bool:
         return self.ll_interpreter.is_accepting()

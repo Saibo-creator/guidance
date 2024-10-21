@@ -73,6 +73,7 @@ class Engine:
         self.metrics = GuidanceEngineMetrics()
 
     def start(self, prompt, grammar, ensure_bos_token=True) -> TokenParser:
+        import pdb; pdb.set_trace()
         """Start processing parser state executed through the grammar.
 
         Parameters
@@ -129,6 +130,7 @@ class Engine:
         grammar: Grammar
             This is the grammar we are extending the prompt with.
         """
+        import pdb; pdb.set_trace()
         parser = self.start(prompt, grammar, ensure_bos_token)
 
         token = None
@@ -402,6 +404,7 @@ class Model:
         # create the new lm object we will return
         # (we need to do this since Model objects are immutable)
         lm = self.copy()
+        import pdb; pdb.set_trace()
 
         # inside this context we are free to drop display calls that come too close together
         with throttle_refresh():
@@ -483,8 +486,8 @@ class Model:
 
             # run stateless functions (grammar nodes)
             elif isinstance(value, GrammarFunction):
-                out = lm._run_stateless(value)
-
+                out = lm._run_stateless(value) # TODO, here we trigger the engine.start() method
+                
             # run stateful functions
             else:
                 out = value(lm)

@@ -682,6 +682,7 @@ def string(value: Union[str, bytes]) -> Union[Null, Join]:
     if len(value) == 0:
         return Null()
     else:
+        import pdb; pdb.set_trace()
         return Join([Byte(b[i : i + 1]) for i in range(len(b))], name=str(b))
 
 
@@ -1220,3 +1221,61 @@ class LLSerializer:
             self.regex_id_cache = {}
             self.run_grammar(grammar.body)
         return self.grammars
+
+
+if __name__ == "__main__":
+
+
+
+    # g = Gen(body_regex="a", stop_regex="b")
+    # print(f"Type of g: {type(g)}")
+    # print(g)
+    # print(g.__repr__())
+
+    # assert GrammarFunction.num_used_names == 0
+
+    # new_name = GrammarFunction._new_name()
+
+    # assert new_name == "a"
+
+    # assert GrammarFunction.num_used_names == 1
+
+    # new_name = GrammarFunction._new_name()
+
+    # assert new_name == "b"
+
+    # for i in range(24):
+    #     new_name = GrammarFunction._new_name()
+    
+    # assert new_name == "z"
+
+    # new_name = GrammarFunction._new_name()
+
+    # assert new_name == "ba" # TODO, why not "aa" ?
+
+
+    # g1 = Gen(body_regex="a", stop_regex="b")
+    # g2 = Gen(body_regex="c", stop_regex="d")
+    # result = g1 + g2 # this results in Join([g1, g2])
+    # print(result)
+
+    # # example usage of string function
+
+    # g = string("hello")
+    # print(repr(g))
+    # print(g)
+
+    # join is just concatenation
+    element1 = Gen(body_regex="a", stop_regex="b")
+    element2 = Gen(body_regex="c", stop_regex="d")
+
+    joined = Join([element1, element2], name="my_join", max_tokens=199)
+    print(repr(joined))
+
+    # try cpature to save the result of a grammar
+    captured = capture(joined, "my_captured")
+    print(repr(captured))
+    print(captured)
+
+
+    #

@@ -16,3 +16,11 @@ class ContextBlock:
 
 def block(name=None, opener="", closer=""):
     return ContextBlock(opener, closer, name=name)
+
+
+
+if __name__ == "__main__":
+    block = ContextBlock("(", ")")
+    with block:
+        print("Hello, world!")
+    print("Goodbye, world!")
