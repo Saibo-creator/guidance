@@ -1,6 +1,6 @@
 from typing import Union
 
-from .._grammar import Join, select
+from .._grammar import JoinRule, select
 from .._guidance import guidance
 from ._optional import optional
 
@@ -8,7 +8,7 @@ from ._optional import optional
 @guidance(stateless=True)
 def exactly_n_repeats(model, value, n_repeats: int):
     assert n_repeats >= 0, f"Must have n_repeats>=0 ({n_repeats})"
-    return model + Join([value] * n_repeats)
+    return model + JoinRule([value] * n_repeats)
 
 
 @guidance(stateless=True)

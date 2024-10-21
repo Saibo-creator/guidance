@@ -1,5 +1,5 @@
 from guidance._grammar import LLSerializer, RegularGrammar, string
-from .._grammar import Subgrammar, Lexeme, GrammarFunction, capture
+from .._grammar import Subgrammar, GrammarLexemeTerminalRule, GrammarRule, capture
 from typing import Optional
 
 
@@ -7,7 +7,7 @@ def lexeme(
     body_regex: str,
     contextual: bool = False,
     json_string: bool = False,
-) -> Lexeme:
+) -> GrammarLexemeTerminalRule:
     """
     Constructs a Lexeme based on a given regular expression.
 
@@ -21,18 +21,18 @@ def lexeme(
         For example, /[a-z"]+/ will be quoted as /([a-z]|\\")+/.
         Defaults to False.
     """
-    return Lexeme(body_regex=body_regex, contextual=contextual, json_string=json_string)
+    return GrammarLexemeTerminalRule(body_regex=body_regex, contextual=contextual, json_string=json_string)
 
 
 def subgrammar(
     name: str = None,
     *,
-    body: GrammarFunction,
+    body: GrammarRule,
     skip_regex: Optional[str] = None,
     no_initial_skip: bool = False,
     max_tokens=100000000,
-) -> GrammarFunction:
-    r: GrammarFunction = Subgrammar(
+) -> GrammarRule:
+    r: GrammarRule = Subgrammar(
         body=body,
         skip_regex=skip_regex,
         no_initial_skip=no_initial_skip,

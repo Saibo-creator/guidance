@@ -11,7 +11,7 @@ from guidance import (
     optional,
     byte_range,
     one_or_more,
-    GrammarFunction,
+    GrammarRule,
     string,
     capture,
 )
@@ -92,7 +92,7 @@ def tokenize_trace(s: str):
     return r
 
 
-def check_grammar(grm: GrammarFunction, output: List[str]):
+def check_grammar(grm: GrammarRule, output: List[str]):
     """
     Check that the grammar generates the expected output.
 
@@ -229,7 +229,7 @@ def test_llparser():
         ['D‧olph‧in‧ name‧:‧ "', 'F‧li‧pper‧",'],  # check that we allow `",` as a single token:
     ],
 )
-def test_ll_dolphin(grm: GrammarFunction, output: List[str]):
+def test_ll_dolphin(grm: GrammarRule, output: List[str]):
     check_grammar(grm, output)
 
 

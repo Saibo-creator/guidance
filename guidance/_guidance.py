@@ -4,7 +4,7 @@ import threading
 from typing import Any
 import weakref
 
-from ._grammar import DeferredReference, RawFunction, Terminal, string
+from ._grammar import DeferredReferenceRule, RawFunction, TerminalRule, string
 from ._utils import strip_multiline_string_indents, make_weak_bound_method, signature_pop
 from .models import Model
 
@@ -139,7 +139,7 @@ def _decorator(f, *, stateless, cache, model):
                 # set a DeferredReference for recursive calls (only if we don't have arguments that might make caching a bad idea)
                 no_args = len(args) + len(kwargs) == 0
                 if no_args:
-                    thread_local._self_call_reference_ = DeferredReference()
+                    thread_local._self_call_reference_ = DeferredReferenceRule()
 
                 try:
                     # call the function to get the grammar node
@@ -147,7 +147,7 @@ def _decorator(f, *, stateless, cache, model):
                 except:
                     raise
                 else:
-                    if not isinstance(node, (Terminal, str)):
+                    if not isinstance(node, (TerminalRule, str)):
                         node.name = f.__name__
                     # set the reference value with our generated node
                     if no_args:

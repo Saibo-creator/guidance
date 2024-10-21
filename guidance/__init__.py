@@ -8,8 +8,8 @@ from ._guidance import guidance
 
 from ._grammar import (
     RawFunction,
-    GrammarFunction,
-    Terminal,
+    GrammarRule,
+    TerminalRule,
     string,
 )
 from ._utils import strip_multiline_string_indents

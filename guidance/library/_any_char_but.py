@@ -1,5 +1,5 @@
 from .._guidance import guidance
-from .._grammar import Byte, byte_range, select
+from .._grammar import ByteTerminalRule, byte_range, select
 
 
 @guidance(stateless=True)
@@ -21,5 +21,5 @@ def any_char_but(lm, forbidden):
             singletons.append(start)
         start = i + 1
     ranges = [byte_range(bytes([i]), bytes([j])) for i, j in ranges]
-    singletons = [Byte(bytes([i])) for i in singletons]
+    singletons = [ByteTerminalRule(bytes([i])) for i in singletons]
     return select(ranges + singletons)
