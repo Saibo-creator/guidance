@@ -146,7 +146,6 @@ def _decorator_make_generator(f, *, stateless, cache, model):
                 if no_args:
                     thread_local._self_call_reference_ = DeferredReferenceRule()
                 try:
-                    import pdb; pdb.set_trace()
                     # call the function to get the grammar node
                     node = f(_null_grammar, *args, **kwargs)
                 except:

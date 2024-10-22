@@ -130,7 +130,6 @@ class Engine:
         grammar: Grammar
             This is the grammar we are extending the prompt with.
         """
-        # import pdb; pdb.set_trace()
         parser = self.start(prompt, grammar, ensure_bos_token)
 
         token = None
@@ -404,7 +403,6 @@ class Model:
         # create the new lm object we will return
         # (we need to do this since Model objects are immutable)
         lm = self.copy()
-        import pdb; pdb.set_trace()
 
         # inside this context we are free to drop display calls that come too close together
         with throttle_refresh():
