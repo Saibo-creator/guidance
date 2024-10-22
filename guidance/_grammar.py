@@ -7,7 +7,7 @@ from . import _parser
 # to support the embedding of guidance functions inside Python f-strings we use tags with these delimiters
 tag_start = "{{G|"  # start of a call tag
 tag_end = "|G}}"  # end of a call tag
-_call_pool: dict[str, "Function"] = {}  # the functions associated with the call tags
+_call_pool: dict[str, "Operator"] = {}  # the functions associated with the call tags
 _tag_pattern = re.compile(
     re.escape(tag_start) + r"([^\|]+)" + re.escape(tag_end)
 )  # the pattern for matching call tags
@@ -23,7 +23,7 @@ class StatefulException(Exception):
     pass
 
 
-class Function:
+class Operator:
     """This is the abstract class representing all guidance functions.
 
     There are two main subclasses: GrammarFunction and RawFunction. GrammarFunctions
@@ -47,7 +47,7 @@ class Function:
         return tag_start + str_id + tag_end
 
 
-class RawFunction(Function):
+class RawFunctionObject(Operator):
     __slots__ = ("f", "args", "kwargs")
 
     def __init__(self, f, args, kwargs):
@@ -70,12 +70,12 @@ class RawFunction(Function):
                 raise Exception(
                     f"The guidance function `{self.f.__name__}` did not return a model object! You need to return an updated model object at the end of your guidance function."
                 )
-            if isinstance(other, GrammarRule):
+            if isinstance(other, GrammarObject):
                 return model + other
             else:
                 return other(model)
 
-        return RawFunction(__add__, [], {})
+        return RawFunctionObject(__add__, [], {})
 
     def __radd__(self, other):
 
@@ -84,13 +84,13 @@ class RawFunction(Function):
             return other + str(self)
 
         def __radd__(model):
-            if isinstance(other, GrammarRule):
+            if isinstance(other, GrammarObject):
                 model += other
             else:
                 model = other(model)
             return self(model)
 
-        return RawFunction(__radd__, [], {})
+        return RawFunctionObject(__radd__, [], {})
 
 
 class Match:
@@ -121,7 +121,7 @@ class Match:
         )
 
 
-class GrammarRule(Function):
+class GrammarObject(Operator):
     __slots__ = "capture_name"
     num_used_names = 0
 
@@ -138,7 +138,7 @@ class GrammarRule(Function):
                 value = string(value)
 
         # see if we can keep building a stateless grammar
-        if isinstance(value, GrammarRule):
+        if isinstance(value, GrammarObject):
             return JoinRule([self, value])
 
         # otherwise we let the stateful object handle things
@@ -155,7 +155,7 @@ class GrammarRule(Function):
                 value = string(value)
 
         # see if we can keep building a stateless grammar
-        if isinstance(value, GrammarRule):
+        if isinstance(value, GrammarObject):
             return JoinRule([value, self])
 
         # otherwise we let the stateful object handle things
@@ -199,7 +199,7 @@ class GrammarRule(Function):
 
     @staticmethod
     def _new_name():
-        num_used = GrammarRule.num_used_names
+        num_used = GrammarObject.num_used_names
 
         a_ord = ord("a")
 
@@ -212,7 +212,7 @@ class GrammarRule(Function):
                 if num_used >= 17576:
                     name = chr(a_ord + (num_used % 456976) // 17576) + name
 
-        GrammarRule.num_used_names += 1
+        GrammarObject.num_used_names += 1
 
         return name
 
@@ -228,10 +228,10 @@ class GrammarRule(Function):
         return {"grammars": LLSerializer().run(self)}
 
 
-ComposableGrammar = Union[GrammarRule, str, bytes]
+ComposableGrammar = Union[GrammarObject, str, bytes]
 
 
-class TerminalRule(GrammarRule):
+class TerminalRule(GrammarObject):
     __slots__ = "temperature"
 
     def __init__(self, *, temperature: float, capture_name: Union[str, None]):
@@ -249,17 +249,17 @@ class DeferredReferenceRule(TerminalRule):
     def __init__(self) -> None:
         super().__init__(temperature=-1, capture_name=None)
         self._resolved = False
-        self._value: Optional[GrammarRule] = None
+        self._value: Optional[GrammarObject] = None
 
     @property
-    def value(self) -> GrammarRule:
+    def value(self) -> GrammarObject:
         if self._resolved:
-            return cast(GrammarRule, self._value)
+            return cast(GrammarObject, self._value)
         else:
             raise ValueError("DeferredReference does not have a value yet")
 
     @value.setter
-    def value(self, value: GrammarRule) -> None:
+    def value(self, value: GrammarObject) -> None:
         if self._resolved:
             raise ValueError("DeferredReference value already set")
         self._value = value
@@ -354,7 +354,7 @@ class NullTerminaleRule(TerminalRule):
         return self.__add__(other)
 
 
-class ModelVariable(GrammarRule):
+class ModelVariable(GrammarObject):
     """This represents a variable that will be read from the model object when this grammar is executed.
 
     Note that the name is the name of the attribute on the model object this node
@@ -420,7 +420,7 @@ def _wrap_as_grammar(value):
     """This takes whatever value was given and tries to turn in into a guidance grammar."""
 
     # if it is already a valid grammar we have no need to wrap it
-    if isinstance(value, GrammarRule):
+    if isinstance(value, GrammarObject):
         return value
 
     # if it is already a valid grammar we have no need to wrap it
@@ -443,7 +443,7 @@ def commit_point(value, hidden=False):
     raise NotImplementedError("commit_point is not implemented (may remove in the future)")
 
 
-class JoinRule(GrammarRule):
+class JoinRule(GrammarObject):
     __slots__ = (
         "values",
         "name",
@@ -459,10 +459,10 @@ class JoinRule(GrammarRule):
         super().__init__(capture_name=None)
         # wrap raw strings
         converted_values = [string(v) if isinstance(v, (str, bytes)) else v for v in values]
-        self.values: list[GrammarRule] = [
+        self.values: list[GrammarObject] = [
             v for v in converted_values if not isinstance(v, NullTerminaleRule)
         ]
-        self.name = name if name is not None else GrammarRule._new_name()
+        self.name = name if name is not None else GrammarObject._new_name()
         self.max_tokens = max_tokens
 
     def __repr__(self, indent="", done=None):
@@ -506,7 +506,7 @@ class GenRegexTerminalRule(TerminalRule):
         super().__init__(temperature=-1, capture_name=None)
         self.body_regex = body_regex
         self.stop_regex = stop_regex
-        self.name = name if name is not None else GrammarRule._new_name()
+        self.name = name if name is not None else GrammarObject._new_name()
         self.save_stop_text = save_stop_text
         self.max_tokens = max_tokens
 
@@ -557,7 +557,7 @@ class RegularGrammar(TerminalRule):
 
     def __init__(
         self,
-        grammar: GrammarRule,
+        grammar: GrammarObject,
         lexeme: bool = False,
         name: Union[str, None] = None,
         max_tokens=100000000,
@@ -565,7 +565,7 @@ class RegularGrammar(TerminalRule):
         super().__init__(capture_name=None, temperature=-1)
         self.grammar = grammar
         self.lexeme = lexeme
-        self.name = name if name is not None else GrammarRule._new_name()
+        self.name = name if name is not None else GrammarObject._new_name()
         self.max_tokens = max_tokens
 
     def __repr__(self, indent="", done=None):
@@ -577,24 +577,24 @@ class AndTerminalRule(TerminalRule):
 
     def __init__(
         self,
-        values: Sequence[GrammarRule],
+        values: Sequence[GrammarObject],
         name: Union[str, None] = None,
     ):
         super().__init__(temperature=-1, capture_name=None)
         self.values = list(values)
-        self.name = name if name is not None else GrammarRule._new_name()
+        self.name = name if name is not None else GrammarObject._new_name()
 
 class NotTerminalRule(TerminalRule):
     __slots__ = ("value", "name")
 
     def __init__(
         self,
-        value: GrammarRule,
+        value: GrammarObject,
         name: Union[str, None] = None,
     ):
         super().__init__(temperature=-1, capture_name=None)
         self.value = value
-        self.name = name if name is not None else GrammarRule._new_name()
+        self.name = name if name is not None else GrammarObject._new_name()
 
 
 class Subgrammar(GenRegexTerminalRule):
@@ -606,7 +606,7 @@ class Subgrammar(GenRegexTerminalRule):
 
     def __init__(
         self,
-        body: GrammarRule,
+        body: GrammarObject,
         skip_regex: Optional[str] = None,
         no_initial_skip: bool = False,
         name: Union[str, None] = None,
@@ -626,7 +626,7 @@ class Subgrammar(GenRegexTerminalRule):
         return self.name.ljust(20) + " <- " + self.body.name
 
 
-class Select(GrammarRule):
+class Select(GrammarObject):
     __slots__ = (
         "_values",
         "name",
@@ -636,24 +636,24 @@ class Select(GrammarRule):
 
     def __init__(
         self,
-        values: Sequence[GrammarRule],
+        values: Sequence[GrammarObject],
         capture_name: Union[str, None] = None,
         name: Union[str, None] = None,
         max_tokens: int = 10000000,
         recursive: bool = False,
     ) -> None:
         super().__init__(capture_name=capture_name)
-        self.values: list[GrammarRule] = values
-        self.name = name if name is not None else GrammarRule._new_name()
+        self.values: list[GrammarObject] = values
+        self.name = name if name is not None else GrammarObject._new_name()
         self.max_tokens = max_tokens
         self.recursive = recursive
 
     @property
-    def values(self) -> Sequence[GrammarRule]:
+    def values(self) -> Sequence[GrammarObject]:
         return self._values
 
     @values.setter
-    def values(self, vals: Sequence[GrammarRule]):
+    def values(self, vals: Sequence[GrammarObject]):
         self._values = [string(v) if isinstance(v, (str, bytes)) else v for v in vals]
 
     def __repr__(self, indent="", done=None):
@@ -691,7 +691,7 @@ def select(
     list_append: bool = False,
     recurse: bool = False,
     skip_checks: bool = False,
-) -> GrammarRule:
+) -> GrammarObject:
     """Choose between a set of options.
 
     This function constrains the next generation from the LLM to be one of the
@@ -730,15 +730,15 @@ def select(
     if not skip_checks:
         for i, value in enumerate(options):
             assert not isinstance(
-                value, RawFunction
+                value, RawFunctionObject
             ), "You cannot select between stateful functions in the current guidance implementation!"
             assert not isinstance(
                 value, types.FunctionType
             ), "Did you pass a function without calling it to select? You need to pass the results of a called guidance function to select."
-    options_converted: list[GrammarRule] = []
+    options_converted: list[GrammarObject] = []
     for opt in options:
         if isinstance(opt, (int, float)):
-            nxt: GrammarRule = string(str(opt))
+            nxt: GrammarObject = string(str(opt))
         elif isinstance(opt, (str, bytes)):
             nxt = string(opt)
         else:
@@ -774,7 +774,7 @@ def byte_range(low: bytes, high: bytes) -> ByteRangeTerminaleRule:
     return ByteRangeTerminaleRule(low + high)
 
 
-def capture(value: GrammarRule, name: str) -> GrammarRule:
+def capture(value: GrammarObject, name: str) -> GrammarObject:
     # if log_probs:
     #     name += ":__LOG_PROBS"
     if not (isinstance(value, JoinRule) and len(value.values) == 1):  # don't double wrap
@@ -852,7 +852,7 @@ def bos_token() -> ModelVariable:
 _null_grammar = string("")
 
 
-def str_to_grammar(value: str) -> Function:
+def str_to_grammar(value: str) -> Operator:
     is_id = False
     parts = re.split(_tag_pattern, value)
 
@@ -869,10 +869,10 @@ def str_to_grammar(value: str) -> Function:
             #     lm.suffix = parts[i+1]
             if is_id:
                 call = _call_pool[part]
-                if isinstance(call, GrammarRule):
+                if isinstance(call, GrammarObject):
                     partial_grammar += _call_pool[part]
                 else:
-                    partial_grammar = RawFunction(
+                    partial_grammar = RawFunctionObject(
                         lambda lm, g, call: call(lm + g),
                         partial_grammar,
                         _call_pool[part],
@@ -902,12 +902,12 @@ class LLSerializer:
             "rx_nodes": [],
         }
         self.grammars = [self.curr_grammar]
-        self.node_id_cache: dict[GrammarRule, int] = {}
-        self.todo: list[GrammarRule] = []
+        self.node_id_cache: dict[GrammarObject, int] = {}
+        self.todo: list[GrammarObject] = []
         self.grammar_id_cache: dict[Subgrammar, int] = {}
         self.grammar_todo: list[Subgrammar] = []
 
-        self.regex_id_cache: dict[GrammarRule, int] = {}
+        self.regex_id_cache: dict[GrammarObject, int] = {}
 
     def _add_regex_json(self, json):
         id = len(self.curr_grammar["rx_nodes"])
@@ -917,37 +917,37 @@ class LLSerializer:
     def _add_regex(self, key: str, val):
         return self._add_regex_json({key: val})
 
-    def _regex_or(self, nodes: Sequence[GrammarRule]):
+    def _regex_or(self, nodes: Sequence[GrammarObject]):
         if len(nodes) == 1:
             return self.regex_id_cache[nodes[0]]
         else:
             return self._add_regex("Or", [self.regex_id_cache[v] for v in nodes])
 
-    def _regex_and(self, nodes: Sequence[GrammarRule]):
+    def _regex_and(self, nodes: Sequence[GrammarObject]):
         if len(nodes) == 1:
             return self.regex_id_cache[nodes[0]]
         else:
             return self._add_regex("And", [self.regex_id_cache[v] for v in nodes])
 
-    def _regex_not(self, node: GrammarRule):
+    def _regex_not(self, node: GrammarObject):
         return self._add_regex("Not", self.regex_id_cache[node])
 
-    def regex(self, node: GrammarRule):
+    def regex(self, node: GrammarObject):
         """
         Serialize node as regex. Throws if impossible.
         """
 
         node0 = node
         todo = [node]
-        pending: set[GrammarRule] = set()
+        pending: set[GrammarObject] = set()
 
-        def node_finished(node: GrammarRule):
+        def node_finished(node: GrammarObject):
             return node not in pending and node in self.regex_id_cache
 
         def all_finished(nodes):
             return all(node_finished(v) for v in nodes)
 
-        def add_todo(n: GrammarRule):
+        def add_todo(n: GrammarObject):
             if n in pending:
                 raise ValueError(
                     "GrammarFunction is recursive - cannot serialize as regex: " + n.__repr__()
@@ -958,7 +958,7 @@ class LLSerializer:
             for n in nodes:
                 add_todo(n)
 
-        def check_unserializable_attrs(node: GrammarRule):
+        def check_unserializable_attrs(node: GrammarObject):
             if not isinstance(node, TerminalRule):
                 for v in getattr(node, "values", []):
                     # Only check one level deeper as we'll soon be processing the children
@@ -1077,7 +1077,7 @@ class LLSerializer:
         self.grammar_todo.append(grammar)
         return id
 
-    def node(self, node: GrammarRule) -> int:
+    def node(self, node: GrammarObject) -> int:
         if node in self.node_id_cache:
             return self.node_id_cache[node]
         id = len(self.nodes)
@@ -1086,7 +1086,7 @@ class LLSerializer:
         self.todo.append(node)
         return id
 
-    def process(self, node: GrammarRule):
+    def process(self, node: GrammarObject):
         obj: dict[str, Any] = {}
         if isinstance(node, Select):
             obj = {
@@ -1197,7 +1197,7 @@ class LLSerializer:
             inner["max_tokens"] = max_tokens
         self.nodes[self.node(node)] = obj
 
-    def run_grammar(self, node: GrammarRule):
+    def run_grammar(self, node: GrammarObject):
         assert self.todo == []
         id = self.node(node)
         assert id == 0
@@ -1210,7 +1210,7 @@ class LLSerializer:
         if _is_string_literal(node):
             root_node = select(options=[node])
         else:
-            root_node = cast(GrammarRule, node)
+            root_node = cast(GrammarObject, node)
         self.run_grammar(root_node)
         while self.grammar_todo:
             grammar = self.grammar_todo.pop()

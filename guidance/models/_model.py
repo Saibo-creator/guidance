@@ -28,7 +28,7 @@ from .._schema import EngineCallResponse, GuidanceEngineMetrics
 from .._utils import softmax, CaptureEvents
 from .._parser import TokenParser
 from .._grammar import (
-    GrammarRule,
+    GrammarObject,
     string,
     _call_pool,
     _tag_pattern,
@@ -130,7 +130,7 @@ class Engine:
         grammar: Grammar
             This is the grammar we are extending the prompt with.
         """
-        import pdb; pdb.set_trace()
+        # import pdb; pdb.set_trace()
         parser = self.start(prompt, grammar, ensure_bos_token)
 
         token = None
@@ -469,7 +469,7 @@ class Model:
                             lm.suffix = parts[i + 1]
                         if is_id:
                             call = _call_pool[part]
-                            if isinstance(call, GrammarRule):
+                            if isinstance(call, GrammarObject):
                                 partial_grammar += _call_pool[part]
                             else:
                                 lm += partial_grammar
@@ -485,7 +485,7 @@ class Model:
                 out = lm
 
             # run stateless functions (grammar nodes)
-            elif isinstance(value, GrammarRule):
+            elif isinstance(value, GrammarObject):
                 out = lm._run_stateless(value) # TODO, here we trigger the engine.start() method
 
             # run stateful functions
@@ -675,14 +675,14 @@ class Model:
         # This needs to be here for streaming
         # if name is not None:
         #     self[name] = ""
-        import pdb;pdb.set_trace()
+        # import pdb;pdb.set_trace()
 
         # replace ModelVariables with their actual values (note we save what we replaced so we can restore it later)
         replacements = replace_model_variables(stateless_function, self)
 
         # start the generation stream
         gen_obj = self.engine(self._current_prompt(), stateless_function)
-        import pdb; pdb.set_trace()
+        # import pdb; pdb.set_trace()
         # we will return a new extended version of ourselves, which we track as `lm`
         lm = self
 

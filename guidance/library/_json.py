@@ -26,7 +26,7 @@ from .._guidance import guidance
 from ..library import char_range, gen, one_or_more, optional, sequence
 from ..library._regex_utils import rx_int_range, rx_float_range
 
-from .._grammar import GrammarRule, select, capture, with_temperature, NotTerminalRule, AndTerminalRule, quote_regex
+from .._grammar import GrammarObject, select, capture, with_temperature, NotTerminalRule, AndTerminalRule, quote_regex
 from ._pydantic import pydantic_to_json_schema
 from ._subgrammar import as_regular_grammar, lexeme, subgrammar
 
@@ -476,7 +476,7 @@ def _gen_json_object(
     properties: Mapping[str, JSONSchema],
     additional_properties: JSONSchema,
     required: Sequence[str],
-    definitions: Mapping[str, Callable[[], GrammarRule]],
+    definitions: Mapping[str, Callable[[], GrammarObject]],
 ):
     # "required" keys will be validated against "properties" if they're present, otherwise against "additionalProperties".
     # If "additionalProperties" is False, then required keys must be in "properties".
@@ -495,7 +495,7 @@ def _gen_json_object(
     grammars = tuple(f'"{name}":' + _gen_json(json_schema=schema, definitions=definitions) for name, schema in items)
     required_items = tuple(name in required for name, _ in items)
     names = set(properties.keys()) | set(required)
-    key_grammar: GrammarRule
+    key_grammar: GrammarObject
     if len(names) > 0:
         # If there are any properties, we need to disallow them as additionalProperties
         key_grammar = as_regular_grammar(
@@ -519,7 +519,7 @@ def _gen_json_object(
     ) + "}"
 
 @guidance(stateless=True, cache=True)
-def _gen_list(lm, *, elements: tuple[GrammarRule, ...], required: tuple[bool, ...], prefixed: bool = False):
+def _gen_list(lm, *, elements: tuple[GrammarObject, ...], required: tuple[bool, ...], prefixed: bool = False):
     if not elements:
         return lm
 
@@ -553,7 +553,7 @@ def _gen_json_array(
     item_schema: JSONSchema,
     min_items: int,
     max_items: Optional[int],
-    definitions: Mapping[str, Callable[[], GrammarRule]],
+    definitions: Mapping[str, Callable[[], GrammarObject]],
 ):
     if len(prefix_items_schema) < min_items and item_schema is False:
         raise ValueError(
@@ -603,7 +603,7 @@ def _gen_json_array(
         # must be present before the next one may be added, meaning we have nested optionals:
         # (first optional(,second optional(,third (optional(,...)))))
         first, *rest = optional_items
-        tail: Union[str, GrammarRule] = ""
+        tail: Union[str, GrammarObject] = ""
         for item in reversed(rest):
             tail = optional("," + item + tail)
         tail = first + tail
@@ -622,7 +622,7 @@ def _process_anyOf(
     lm,
     *,
     anyof_list: Sequence[JSONSchema],
-    definitions: Mapping[str, Callable[[], GrammarRule]],
+    definitions: Mapping[str, Callable[[], GrammarObject]],
 ):
     options = [_gen_json(json_schema=item, definitions=definitions) for item in anyof_list]
     return lm + select(options)
@@ -669,7 +669,7 @@ def _gen_json_any(lm):
 def _gen_json(
     lm,
     json_schema: JSONSchema,
-    definitions: Mapping[str, Callable[[], GrammarRule]],
+    definitions: Mapping[str, Callable[[], GrammarObject]],
 ):
     if json_schema is True:
         json_schema = {}
@@ -714,8 +714,8 @@ def _gen_json(
     else:
         target_types = list(JSONType)
 
-    options: list[Union[str, GrammarRule]] = []
-    option: Union[str, GrammarRule]
+    options: list[Union[str, GrammarObject]] = []
+    option: Union[str, GrammarObject]
     for target_type in target_types:
         if target_type == JSONType.NULL:
             option = "null"
@@ -858,7 +858,7 @@ def json(
     else:
         raise TypeError(f"Unsupported schema type: {type(schema)}")
 
-    definitions: Mapping[str, Callable[[], GrammarRule]] = {}
+    definitions: Mapping[str, Callable[[], GrammarObject]] = {}
     if isinstance(schema, Mapping):
         for dk in DEFS_KEYS:
             if dk in schema:
@@ -882,10 +882,10 @@ def json(
 
 def _build_definitions(
     raw_definitions: Mapping[str, JSONSchema]
-) -> Mapping[str, Callable[[], GrammarRule]]:
-    definitions: Dict[str, Callable[[], GrammarRule]] = {}
+) -> Mapping[str, Callable[[], GrammarObject]]:
+    definitions: Dict[str, Callable[[], GrammarObject]] = {}
 
-    def build_definition(json_schema: JSONSchema) -> Callable[[], GrammarRule]:
+    def build_definition(json_schema: JSONSchema) -> Callable[[], GrammarObject]:
         @guidance(stateless=True, dedent=False, cache=True)
         def closure(lm):
             return lm + _gen_json(json_schema=json_schema, definitions=definitions)
@@ -901,7 +901,7 @@ def _get_definition(
     lm,
     *,
     reference: str,
-    definitions: Mapping[str, Callable[[], GrammarRule]],
+    definitions: Mapping[str, Callable[[], GrammarObject]],
 ):
     assert definitions is not None
     target_definition = None

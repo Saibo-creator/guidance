@@ -6,7 +6,7 @@ from huggingface_hub import hf_hub_download
 
 import guidance
 from guidance import models
-from guidance._grammar import GrammarRule, JoinRule
+from guidance._grammar import GrammarObject, JoinRule
 from guidance._parser import ByteParserException
 
 opanai_model_cache = {}
@@ -152,7 +152,7 @@ def check_match_failure(
     good_bytes: Optional[bytes] = None,
     failure_byte: Optional[bytes] = None,
     allowed_bytes: Optional[Set[bytes]] = None,
-    grammar: GrammarRule,
+    grammar: GrammarObject,
 ):
     """
     Helper function to check that a string fails to match a grammar after consuming
@@ -176,7 +176,7 @@ class GrammarFunctionCallable(Protocol):
     name argument for capture key
     """
 
-    def __call__(self, *args, name: str, **kwargs) -> GrammarRule: ...
+    def __call__(self, *args, name: str, **kwargs) -> GrammarObject: ...
 
 
 def generate_and_check(

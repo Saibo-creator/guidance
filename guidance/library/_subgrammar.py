@@ -1,5 +1,5 @@
 from guidance._grammar import LLSerializer, RegularGrammar, string
-from .._grammar import Subgrammar, GrammarLexemeTerminalRule, GrammarRule, capture
+from .._grammar import Subgrammar, GrammarLexemeTerminalRule, GrammarObject, capture
 from typing import Optional
 
 
@@ -27,12 +27,12 @@ def lexeme(
 def subgrammar(
     name: str = None,
     *,
-    body: GrammarRule,
+    body: GrammarObject,
     skip_regex: Optional[str] = None,
     no_initial_skip: bool = False,
     max_tokens=100000000,
-) -> GrammarRule:
-    r: GrammarRule = Subgrammar(
+) -> GrammarObject:
+    r: GrammarObject = Subgrammar(
         body=body,
         skip_regex=skip_regex,
         no_initial_skip=no_initial_skip,

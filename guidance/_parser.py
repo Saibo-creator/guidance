@@ -6,7 +6,7 @@ import llguidance  # type: ignore[import-untyped]
 import numpy as np
 from numpy.typing import NDArray
 
-from ._grammar import GrammarRule, JoinRule, TerminalRule
+from ._grammar import GrammarObject, JoinRule, TerminalRule
 from ._schema import GenData, EngineCallResponse, LLInterpreterResponse
 from .models._byte_tokenizer import ByteTokenizer
 from .models._tokenizer import Tokenizer
@@ -30,12 +30,12 @@ class TokenParser:
 
     def __init__(
         self,
-        grammar: Union[GrammarRule, str],
+        grammar: Union[GrammarObject, str],
         tokenizer: Tokenizer,
         prompt: bytes = b"",
         ensure_bos_token: bool = True,
     ):
-        if isinstance(grammar, GrammarRule):
+        if isinstance(grammar, GrammarObject):
             # we can't have a terminal as the root
             if isinstance(grammar, TerminalRule):
                 grammar = JoinRule([grammar])
@@ -54,7 +54,7 @@ class TokenParser:
         )
         self._generator = self._parse(prompt, ensure_bos_token)
         self._done = False
-        import pdb; pdb.set_trace()
+        # import pdb; pdb.set_trace()
 
     def is_accepting(self) -> bool:
         return self.ll_interpreter.is_accepting()
@@ -145,7 +145,7 @@ class ByteParserException(Exception):
 class ByteParser:
     def __init__(
         self,
-        grammar: GrammarRule,
+        grammar: GrammarObject,
         prompt: bytes = b"",
         ensure_bos_token: bool = True,
     ):

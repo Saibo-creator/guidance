@@ -11,12 +11,11 @@ prompt = "Long time ago in a far away galaxy, there was a"
 
 guidance_model = guidance.models.Transformers(model="microsoft/Phi-3.5-mini-instruct")
 
-guidance_model.echo=False
+# guidance_model.echo=False
 
 
 gen_op = guidance.gen(name="generated_object", max_tokens=5)
 
 print(repr(gen_op))
 output_state = guidance_model + prompt + gen_op
-import pdb; pdb.set_trace()
 # print(output_state["generated_object"])

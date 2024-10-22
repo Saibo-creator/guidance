@@ -4,12 +4,14 @@ import threading
 from typing import Any
 import weakref
 
-from ._grammar import DeferredReferenceRule, RawFunction, TerminalRule, string
+from ._grammar import DeferredReferenceRule, RawFunctionObject, TerminalRule, string
 from ._utils import strip_multiline_string_indents, make_weak_bound_method, signature_pop
 from .models import Model
 
 
-def guidance(
+
+# called guidance before=>guidancify
+def get_guidance_generator(
     f = None,
     *,
     stateless = False,
@@ -22,17 +24,19 @@ def guidance(
 
     if f is None:
         return functools.partial(
-            guidance, stateless=stateless, cache=cache, dedent=dedent, model=model,
+            get_guidance_generator, stateless=stateless, cache=cache, dedent=dedent, model=model,
         )
 
     # this strips out indentation in multiline strings that aligns with the current python indentation
     if dedent is True or dedent == "python":
         f = strip_multiline_string_indents(f)
 
-    return GuidanceFunction(f, stateless=stateless, cache=cache, model=model)
+    return GuidanceGenerator(f, stateless=stateless, cache=cache, model=model)
 
+# old name
+guidance = get_guidance_generator
 
-class GuidanceFunction:
+class GuidanceGenerator:
     def __init__(
         self,
         f,
@@ -45,16 +49,17 @@ class GuidanceFunction:
         self.stateless = stateless
         self.cache = cache
         self.model = model
-        self._impl = _decorator(f, stateless=stateless, cache=cache, model=model)
+        # called self._impl before
+        self._impl_generator = _decorator_make_generator(f, stateless=stateless, cache=cache, model=model)
         self._methods: dict[Any, GuidanceMethod] = {}
 
         # Update self with the wrapped function's metadata
-        functools.update_wrapper(self, self._impl)
+        functools.update_wrapper(self, self._impl_generator)
         # Pretend to be one level of wrapping lower than we are
-        self.__wrapped__ = self._impl.__wrapped__
+        self.__wrapped__ = self._impl_generator.__wrapped__
 
     def __call__(self, *args, **kwargs):
-        return self._impl(*args, **kwargs)
+        return self._impl_generator(*args, **kwargs)
 
     def __get__(self, instance, owner=None, /):
         """
@@ -81,7 +86,7 @@ class GuidanceMethod:
         self.__wrapped__ = impl.__wrapped__
 
     @classmethod
-    def from_guidance_function(cls, guidance_function: GuidanceFunction, instance: Any) -> "GuidanceMethod":
+    def from_guidance_function(cls, guidance_function: GuidanceGenerator, instance: Any) -> "GuidanceMethod":
         # We can't directly use a weakref.WeakKeyDictionary because those don't really work when the key objects
         # are allowed to change their hash value.
 
@@ -94,7 +99,7 @@ class GuidanceMethod:
         except KeyError:
             # Make a weak bound method to prevent the instance from being kept alive by the cache
             weak_method = make_weak_bound_method(guidance_function.f, instance)
-            impl = _decorator(weak_method, stateless=guidance_function.stateless, cache=guidance_function.cache, model=guidance_function.model)
+            impl = _decorator_make_generator(weak_method, stateless=guidance_function.stateless, cache=guidance_function.cache, model=guidance_function.model)
             cls.impl_cache[key] = impl
             # Clean up the cache when the instance is deleted
             weakref.finalize(instance, cls.impl_cache.pop, key)
@@ -110,7 +115,7 @@ class GuidanceMethod:
 _null_grammar = string("")
 
 
-def _decorator(f, *, stateless, cache, model):
+def _decorator_make_generator(f, *, stateless, cache, model):
     # we cache the function itself if requested
     # do this before updating the wrapper so we can maintain the __wrapped__ chain
     if cache:
@@ -140,8 +145,8 @@ def _decorator(f, *, stateless, cache, model):
                 no_args = len(args) + len(kwargs) == 0
                 if no_args:
                     thread_local._self_call_reference_ = DeferredReferenceRule()
-
                 try:
+                    import pdb; pdb.set_trace()
                     # call the function to get the grammar node
                     node = f(_null_grammar, *args, **kwargs)
                 except:
@@ -160,9 +165,10 @@ def _decorator(f, *, stateless, cache, model):
 
         # otherwise must be stateful (which means we can't be inside a select() call)
         else:
-            return RawFunction(f, args, kwargs)
+            return RawFunctionObject(f, args, kwargs)
  
     # Remove the first argument from the wrapped function since we're going to drop the `lm` argument
+    # TODO, why can we drop the lm argument?
     wrapped.__signature__ = signature_pop(inspect.signature(f), 0)
 
     # attach this as a method of the model class (if given)

@@ -7,8 +7,8 @@ from . import models
 from ._guidance import guidance
 
 from ._grammar import (
-    RawFunction,
-    GrammarRule,
+    RawFunctionObject,
+    GrammarObject,
     TerminalRule,
     string,
 )
