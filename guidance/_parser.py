@@ -94,14 +94,16 @@ class TokenParser:
         tokens = self._process_prompt(prompt=prompt, ensure_bos_token=ensure_bos_token)
 
         while True:
-            mask, resp = self.ll_interpreter.mid_process()
-            r = LLInterpreterResponse.model_validate_json(resp)
+            mask, ll_response = self.ll_interpreter.mid_process()
+            r = LLInterpreterResponse.model_validate_json(ll_response)
             response = r.progress.to_engine_call_response()
             if r.stop:
                 break
 
             if mask is not None:
                 assert r.temperature is not None
+
+                # essentially the mask
                 gen_data = GenData(
                     tokens=tokens,
                     mask=mask,
@@ -115,6 +117,8 @@ class TokenParser:
                     # Note: we could punt this probem to ll_interpreter.post_process,
                     # but it's a bit clearer to handle it here
                     raise InvalidTokenException(token, gen_data.valid_next_tokens, tokens)
+
+            # Do this mean the generation is done?
             else:
                 gen_data = None
                 token = yield (gen_data, response)

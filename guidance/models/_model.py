@@ -73,7 +73,6 @@ class Engine:
         self.metrics = GuidanceEngineMetrics()
 
     def start(self, prompt, grammar, ensure_bos_token=True) -> TokenParser:
-        import pdb; pdb.set_trace()
         """Start processing parser state executed through the grammar.
 
         Parameters
