@@ -1,0 +1,342 @@
+diff --git a/.git_diff.txt b/.git_diff.txt
+new file mode 100644
+index 0000000..0bce256
+--- /dev/null
++++ b/.git_diff.txt
+@@ -0,0 +1,173 @@
++diff --git a/guidance/_parser.py b/guidance/_parser.py
++index 24e5d40..be32685 100644
++--- a/guidance/_parser.py
+++++ b/guidance/_parser.py
++@@ -94,14 +94,16 @@ class TokenParser:
++         tokens = self._process_prompt(prompt=prompt, ensure_bos_token=ensure_bos_token)
++ 
++         while True:
++-            mask, resp = self.ll_interpreter.mid_process()
++-            r = LLInterpreterResponse.model_validate_json(resp)
+++            mask, ll_response = self.ll_interpreter.mid_process()
+++            r = LLInterpreterResponse.model_validate_json(ll_response)
++             response = r.progress.to_engine_call_response()
++             if r.stop:
++                 break
++ 
++             if mask is not None:
++                 assert r.temperature is not None
+++
+++                # essentially the mask
++                 gen_data = GenData(
++                     tokens=tokens,
++                     mask=mask,
++@@ -115,6 +117,8 @@ class TokenParser:
++                     # Note: we could punt this probem to ll_interpreter.post_process,
++                     # but it's a bit clearer to handle it here
++                     raise InvalidTokenException(token, gen_data.valid_next_tokens, tokens)
+++
+++            # Do this mean the generation is done?
++             else:
++                 gen_data = None
++                 token = yield (gen_data, response)
++diff --git a/guidance/models/_grammarless.py b/guidance/models/_grammarless.py
++index a69afef..9a622d4 100644
++--- a/guidance/models/_grammarless.py
+++++ b/guidance/models/_grammarless.py
++@@ -177,13 +177,11 @@ class GrammarlessEngine(Engine):
++         self._token_trie = cpp.ByteTrie(
++             self.tokenizer.tokens, np.arange(len(self.tokenizer.tokens))
++         )
++-        import pdb; pdb.set_trace()
++ 
++     def _generator(self, prompt: bytes, temperature: float):
++         raise NotImplementedError("Child classes must implement _generator()")
++ 
++     def __call__(self, *args, **kwargs):
++-        import pdb; pdb.set_trace()
++         self._num_calls_made = 0  # reset the number of calls count so we only limit the number of calls within a single grammar execution
++         return super().__call__(*args, **kwargs)
++ 
++diff --git a/guidance/models/_model.py b/guidance/models/_model.py
++index 018563e..90fab58 100644
++--- a/guidance/models/_model.py
+++++ b/guidance/models/_model.py
++@@ -73,7 +73,6 @@ class Engine:
++         self.metrics = GuidanceEngineMetrics()
++ 
++     def start(self, prompt, grammar, ensure_bos_token=True) -> TokenParser:
++-        import pdb; pdb.set_trace()
++         """Start processing parser state executed through the grammar.
++ 
++         Parameters
++diff --git a/saibo_teardown/teardown_json_mode.py b/saibo_teardown/teardown_json_mode.py
++new file mode 100644
++index 0000000..59ddf3e
++--- /dev/null
+++++ b/saibo_teardown/teardown_json_mode.py
++@@ -0,0 +1,17 @@
+++import guidance
+++from guidance._grammar import capture
+++from guidance.library._json import _gen_json, _gen_json_array, _gen_json_object, _gen_json_any, \
+++    _gen_json_int, _gen_json_number, _gen_json_string, _gen_list, _get_format_pattern
+++
+++
+++
+++
+++lm = guidance.models.Transformers(model="microsoft/Phi-3.5-mini-instruct")
+++
+++lm.echo = False
+++
+++
+++
+++output_state = lm + "Please generate a JSON object with the following fields: " + _gen_json_string(min_length=5, max_length=10)
+++
+++
++diff --git a/saibo_teardown/teardown_operators.py b/saibo_teardown/teardown_operators.py
++new file mode 100644
++index 0000000..e25343d
++--- /dev/null
+++++ b/saibo_teardown/teardown_operators.py
++@@ -0,0 +1,49 @@
+++import guidance
+++from guidance import select, capture
+++from guidance._grammar import Select, JoinRule
+++from guidance.library._sequences import exactly_n_repeats
+++from guidance.library._subgrammar import lexeme
+++from guidance.library._gen import gen_quote, regex
+++
+++
+++
+++lm = guidance.models.Transformers(model="microsoft/Phi-3.5-mini-instruct")
+++
+++lm.echo = False
+++
+++
+++# out  = lm + f'Do you want a joke or a poem? A ' + select(['joke', 'poem'], name='choice') + f' please!'
+++
+++# print(out['choice'])
+++
+++out = lm + f'Do you want a joke or a poem? A ' + Select(['joke', 'poem'], capture_name='choice') + f' please!'
+++print(out['choice'])
+++
+++
+++# exactly n repeats
+++
+++out = lm + f'Please repeat the word "hello" exactly 3 times: ' + capture(exactly_n_repeats('hello', 3), 'repeats')
+++print(out['repeats'])
+++
+++# exactly n repeats directly with grammar rules
+++
+++out = lm + f'Please repeat the word "hello" exactly 3 times: ' + capture(JoinRule(["hello"] * 3), 'repeats')
+++
+++print(out['repeats'])
+++
+++
+++# try lexeme
+++
+++out = lm + f'Please repeat the word "hello": ' + capture(lexeme("hello"), 'lexeme')
+++
+++
+++print(out['lexeme'])
+++
+++
+++# text regex
+++
+++out = lm + f'Please write a telephone number: ' + capture(regex(r'\d{3}-\d{3}-\d{4}'), 'phone')
+++
+++print(out['phone'])
+++
+++
++diff --git a/saibo_teardown/teardown_tokenparser.py b/saibo_teardown/teardown_tokenparser.py
++new file mode 100644
++index 0000000..5f8bf42
++--- /dev/null
+++++ b/saibo_teardown/teardown_tokenparser.py
++@@ -0,0 +1,26 @@
+++from guidance._parser import TokenParser
+++
+++from guidance._grammar import Select, JoinRule
+++from guidance.library._sequences import exactly_n_repeats
+++from guidance.library._subgrammar import lexeme
+++from guidance.library._gen import gen_quote, regex
+++
+++from guidance.models.transformers._transformers import TransformersTokenizer
+++
+++
+++select_grammar = Select(['joke', 'poem'], capture_name='choice')
+++
+++exactly_n_repeats_grammar = exactly_n_repeats('hello', 3)
+++
+++lexeme_grammar = lexeme("hello")
+++
+++regex_grammar = regex(r'\d{3}-\d{3}-\d{4}')
+++
+++
+++phi_tokenizer = TransformersTokenizer(model="microsoft/Phi-3.5-mini-instruct",
+++                                      transformers_tokenizer=None)
+++
+++
+++select_token_parser = TokenParser(select_grammar, phi_tokenizer)
+++
+++print("successful")
++\ No newline at end of file
+diff --git a/guidance/_parser.py b/guidance/_parser.py
+index e6a2267..da788c7 100644
+--- a/guidance/_parser.py
++++ b/guidance/_parser.py
+@@ -21,6 +21,7 @@ class InvalidTokenException(TokenParserException):
+         self.token = token
+         self.valid_tokens = valid_tokens
+         self.prompt_tokens = prompt_tokens
++        import pdb; pdb.set_trace()
+         super().__init__(
+             f"Invalid token {token}, expected one of {valid_tokens} after {prompt_tokens}"
+         )
+diff --git a/test_mock_model.py b/test_mock_model.py
+new file mode 100644
+index 0000000..5202507
+--- /dev/null
++++ b/test_mock_model.py
+@@ -0,0 +1,111 @@
++
++import guidance
++from transformers import (
++    LlamaForCausalLM,
++    LlamaConfig,
++    AutoTokenizer,
++    Phi3Config,
++    Phi3ForCausalLM,
++)
++from transformers.utils import ModelOutput
++import torch
++
++
++class EchoModelMixin:
++
++    def __init__(self, *args, **kwargs):
++        super().__init__(*args, **kwargs)
++        self._repeat_queue = Queue()
++
++    def set_repeat_sequence(self, token_ids: list[int]):
++        """Set the sequence of tokens that the model will repeat during generation."""
++        for token_id in token_ids:
++            self._repeat_queue.put(token_id)
++
++    def adjust_logits_for_repeat(self, output: ModelOutput):
++        """Adjust logits to focus on repeating the next token from the queue."""
++        try:
++            next_token_to_repeat = self._repeat_queue.get(block=False)
++        except:
++            next_token_to_repeat = self.config.eos_token_id
++
++        # print("Next token to repeat:", next_token_to_repeat)
++        # Set the logits of all tokens other than the next token to -inf.
++        output.logits[:, :, :next_token_to_repeat] = float("-inf")
++        output.logits[:, :, next_token_to_repeat + 1:] = float("-inf")
++        return output
++    
++    def forward(self, input_ids=None, **kwargs) -> ModelOutput:
++        output = super().forward(input_ids, **kwargs)
++        return self.adjust_logits_for_repeat(output)
++
++
++from queue import Queue
++
++
++class EchoLlamaForCausalLM(EchoModelMixin,LlamaForCausalLM):
++    def __init__(self, *args, **kwargs):
++        super().__init__(*args, **kwargs)
++
++
++class EchoPhi3ForCausalLM(EchoModelMixin, Phi3ForCausalLM):
++    def __init__(self, *args, **kwargs):
++        super().__init__(*args, **kwargs)
++
++
++
++
++if __name__ == "__main__":
++
++    # randomly init a tiny llama model
++    pretrained_llama_tokenizer = AutoTokenizer.from_pretrained(
++        "hf-internal-testing/llama-tokenizer", use_fast=False
++    )
++    tiny_llama_config = LlamaConfig(
++        vocab_size=pretrained_llama_tokenizer.vocab_size,
++        eos_token_id=pretrained_llama_tokenizer.eos_token_id,
++        pad_token_id=pretrained_llama_tokenizer.pad_token_id,
++        bos_token_id=pretrained_llama_tokenizer.bos_token_id,
++        hidden_size=4,
++        intermediate_size=8,
++        num_attention_heads=1,
++        num_hidden_layers=1,
++    )
++
++    echo_llama_model = EchoLlamaForCausalLM(tiny_llama_config)
++    # print(echo_llama_model)
++
++    llama_model = LlamaForCausalLM.from_pretrained("meta-llama/Llama-3.2-1B")
++
++    echo_llama_model = EchoLlamaForCausalLM.from_pretrained("meta-llama/Llama-3.2-1B")
++
++    pretrained_llama_tokenizer = AutoTokenizer.from_pretrained(
++        "meta-llama/Llama-3.2-1B", use_fast=False
++    )
++
++    prompt = " The quick brown fox jumps over the lazy dog."
++
++    # # set the target token ids
++    target_token_ids = pretrained_llama_tokenizer(prompt)["input_ids"]
++    print(target_token_ids)
++    ###################
++    # Output
++    ###################
++
++    prompt = " The quick brown fox jumps over the lazy dog."
++
++    # set the target token ids
++    target_token_ids = pretrained_llama_tokenizer(prompt)["input_ids"]
++    print(target_token_ids)
++    print(pretrained_llama_tokenizer(prompt*2)["input_ids"])
++
++    echo_llama_model.set_repeat_sequence(token_ids=target_token_ids[1:]) # TODO, need to remove the BOS token in a proper way
++    guidance_model = guidance.models.Transformers(model=echo_llama_model, tokenizer=pretrained_llama_tokenizer)
++    # guidance_model = guidance.models.Transformers(model=llama_model, tokenizer=pretrained_llama_tokenizer)
++
++
++    gen_op = guidance.gen(name="generated_object", max_tokens=20)
++
++    output_state = guidance_model + "" + gen_op # replace prompt by "" to avoid error TODO, use prompt will cause error
++    # print(output_state["generated_object"])
++    
+\ No newline at end of file
+diff --git a/test_unicode_guidance.py b/test_unicode_guidance.py
+new file mode 100644
+index 0000000..2472430
+--- /dev/null
++++ b/test_unicode_guidance.py
+@@ -0,0 +1,26 @@
++import guidance
++
++
++
++
++lm = guidance.models.Transformers(model="microsoft/Phi-3.5-mini-instruct")
++
++lm.echo = False
++
++json_schema = {
++    "type": "object",
++    "properties": {
++        "姓名": {
++            "type": "string"
++        },
++        "年龄": {
++            "type": "integer"
++        }
++    },
++    "required": ["姓名", "年龄"],
++    "additionalProperties": False
++}
++
++lm = lm + guidance.json(name="unicode_json", schema=json_schema)
++
++print(lm["unicode_json"])
+\ No newline at end of file

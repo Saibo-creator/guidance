@@ -21,6 +21,7 @@ class InvalidTokenException(TokenParserException):
         self.token = token
         self.valid_tokens = valid_tokens
         self.prompt_tokens = prompt_tokens
+        import pdb; pdb.set_trace()
         super().__init__(
             f"Invalid token {token}, expected one of {valid_tokens} after {prompt_tokens}"
         )
