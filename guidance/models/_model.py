@@ -689,7 +689,11 @@ class Model:
 
             delayed_bytes = b""
             # last_is_generated = False
-            for chunk in gen_obj:
+            for i, chunk in enumerate(gen_obj):
+
+                # we save the time at first chunk
+                if i == 0:
+                    self.TaFC = time.time()
 
                 # we make everything full probability if we are not computing uncertainty
                 # if not self.engine.compute_log_probs:
